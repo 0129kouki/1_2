@@ -10,6 +10,11 @@
 using namespace DirectX;
 #include <d3dcompiler.h>
 #pragma comment(lib, "d3dcompiler.lib")
+#define DIRECTINPUT_VERSION   0x0800
+#include <dinput.h>
+
+#pragma comment(lib,"dinput8.lib")
+#pragma comment(lib,"dxguid.lib")
 // ウィンドウプロシージャ
 LRESULT WindowProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
 	// メッセージに応じてゲーム固有の処理を行う
@@ -219,6 +224,18 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
 
 
 	////////////////////////////////////////////////////////////////////////////////////// DirectX初期化処理 ここまで//////////////////////////////////////////////////////////////////////////////////////
+	//////////////////////////////////////////////////////////////////////////////////////DirectX初期化  ここから//////////////////////////////////////////////////////////////////////////////////////
+	IDirectInput8* directInput = nullptr;
+	result = DirectInput8Create(w.hInstance, DIRECTINPUT_VERSION, IID_IDirectInput8, (void**)&directInput, nullptr);
+	assert(SUCCEEDED(result));
+	IDirectInputDevice8* keyboard = nullptr;
+	result = directInput->CreateDevice(GUID_SysKeyboard, &keyboard, NULL);
+	assert(SUCCEEDED(result));
+	result = keyboard->SetDataFormat(&c_dfDIKeyboard);
+	assert(SUCCEEDED(result));
+	result = keyboard->SetCooperativeLevel(hwnd, DISCL_FOREGROUND | DISCL_NONEXCLUSIVE | DISCL_NOWINKEY);
+	assert(SUCCEEDED(result));
+	//////////////////////////////////////////////////////////////////////////////////////DirectX初期化  ここまで//////////////////////////////////////////////////////////////////////////////////////
 	// 頂点データ
 	XMFLOAT3 vertices[] = {
 	{ -0.5f, -0.5f, 0.0f }, // 左下
@@ -365,15 +382,27 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
 // ゲームループ
 	while (true) {
 		// メッセージがある?
-		if (PeekMessage(&msg, nullptr, 0, 0, PM_REMOVE)) {
+		if (PeekMessage(&msg, nullptr, 0, 0, PM_REMOVE)) 
+		{
 			TranslateMessage(&msg); // キー入力メッセージの処理
 			DispatchMessage(&msg); // プロシージャにメッセージを送る
 		}
 		// ✖ボタンで終了メッセージが来たらゲームループを抜ける
-		if (msg.message == WM_QUIT) {
+		if (msg.message == WM_QUIT) 
+		{
 			break;
 		}
 		// DirectX毎フレーム処理 ここから
+		keyboard->Acquire();
+		BYTE key[256] = {};
+		keyboard->GetDeviceState(sizeof(key), key);
+		// 数字の0キーが押されていたら
+		if (key[DIK_0])
+		{
+			OutputDebugStringA("Hit 0\n");  // 出力ウィンドウに「Hit 0」と表示
+		}
+
+
 		// バックバッファの番号を取得(2つなので0番か1番)
 	UINT bbIndex = swapChain->GetCurrentBackBufferIndex();
 	// 1.リソースバリアで書き込み可能に変更
@@ -390,9 +419,23 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
 	commandList->OMSetRenderTargets(1, &rtvHandle, false, nullptr);
 
 	// 3.画面クリア R G B A
-	FLOAT clearColor[] = { 0.1f,0.25f, 0.5f,0.0f }; // 青っぽい色
-	commandList->ClearRenderTargetView(rtvHandle, clearColor, 0, nullptr);
-
+	FLOAT clearColor0[] = { 0.0f,0.25f, 0.0f,0.0f };
+	FLOAT clearColor1[] = { 0.1f,0.25f, 0.5f,0.0f };
+	FLOAT clearColor2[] = { 0.1f,0.0f, 0.5f,0.0f };
+	FLOAT clearColor3[] = { 0.1f,0.25f, 0.25f,0.0f };
+	commandList->ClearRenderTargetView(rtvHandle, clearColor0, 0, nullptr);
+	if (key[DIK_SPACE])
+	{
+		commandList->ClearRenderTargetView(rtvHandle, clearColor1, 0, nullptr);
+	}
+	if (key[DIK_RETURN])
+	{
+		commandList->ClearRenderTargetView(rtvHandle, clearColor2, 0, nullptr);
+	}
+	if (key[DIK_A])
+	{
+		commandList->ClearRenderTargetView(rtvHandle, clearColor3, 0, nullptr);
+	}
 // 4.描画コマンドここから
 	// ビューポート設定コマンド
 	D3D12_VIEWPORT viewport{};
