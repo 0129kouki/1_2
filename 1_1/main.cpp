@@ -337,8 +337,9 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
 		pipelineDesc.SampleMask = D3D12_DEFAULT_SAMPLE_MASK; // 標準設定
 		// ラスタライザの設定
 		pipelineDesc.RasterizerState.CullMode = D3D12_CULL_MODE_NONE; // カリングしない
+		pipelineDesc.RasterizerState.FillMode = D3D12_FILL_MODE_WIREFRAME; // ワイヤーフレーム
 		pipelineDesc.RasterizerState.FillMode = D3D12_FILL_MODE_SOLID; // ポリゴン内塗りつぶし
-		pipelineDesc.RasterizerState.DepthClipEnable = true; // 深度クリッピングを有効に
+		//pipelineDesc.RasterizerState.DepthClipEnable = true; // 深度クリッピングを有効に
 		// ブレンドステート
 		pipelineDesc.BlendState.RenderTarget[0].RenderTargetWriteMask
 			= D3D12_COLOR_WRITE_ENABLE_ALL; // RBGA全てのチャンネルを描画
@@ -439,12 +440,12 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
 // 4.描画コマンドここから
 	// ビューポート設定コマンド
 	D3D12_VIEWPORT viewport{};
-	viewport.Width = window_width;
-	viewport.Height = window_height;
-	viewport.TopLeftX = 0;
-	viewport.TopLeftY = 0;
-	viewport.MinDepth = 0.0f;
-	viewport.MaxDepth = 1.0f;
+	viewport.Width = window_width;//横幅
+	viewport.Height = window_height;//縦幅
+	viewport.TopLeftX = 0;//左上X
+	viewport.TopLeftY = 0;//左上Y
+	viewport.MinDepth = 0.0f;//最小深度
+	viewport.MaxDepth = 1.0f;//最大深度
 	// ビューポート設定コマンドを、コマンドリストに積む
 	commandList->RSSetViewports(1, &viewport);
 	// シザー矩形
