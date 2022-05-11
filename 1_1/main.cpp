@@ -224,7 +224,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
 
 
 	////////////////////////////////////////////////////////////////////////////////////// DirectX初期化処理 ここまで//////////////////////////////////////////////////////////////////////////////////////
-	//////////////////////////////////////////////////////////////////////////////////////DirectX初期化  ここから//////////////////////////////////////////////////////////////////////////////////////
+	////////////////////////////////////////////////////////////////////////////////////////DirectX初期化  ここから////////////////////////////////////////////////////////////////////////////////////////
 	IDirectInput8* directInput = nullptr;
 	result = DirectInput8Create(w.hInstance, DIRECTINPUT_VERSION, IID_IDirectInput8, (void**)&directInput, nullptr);
 	assert(SUCCEEDED(result));
@@ -235,7 +235,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
 	assert(SUCCEEDED(result));
 	result = keyboard->SetCooperativeLevel(hwnd, DISCL_FOREGROUND | DISCL_NONEXCLUSIVE | DISCL_NOWINKEY);
 	assert(SUCCEEDED(result));
-	//////////////////////////////////////////////////////////////////////////////////////DirectX初期化  ここまで//////////////////////////////////////////////////////////////////////////////////////
+	//////////////////////////////////////////////////////////////////////////////////////DirectX初期化  ここまで/////////////////////////////////////////////////////////////////////////////////////////
 	// 頂点データ
 	XMFLOAT3 vertices[] = {
 	{ -0.5f, -0.5f, 0.0f }, // 左下
@@ -367,6 +367,12 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
 		blenddesc.SrcBlend = D3D12_BLEND_SRC_ALPHA;         // ソースのアルファ値
 		blenddesc.DestBlend = D3D12_BLEND_INV_SRC_ALPHA;    // 1.0f-ソースのアルファ値
 
+		// ルートパラメータの設定
+		D3D12_ROOT_PARAMETER rootParam = {};
+		rootParam.ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;    // 定数バッファビュー
+		rootParam.Descriptor.ShaderRegister = 0;                    // 定数バッファ番号
+		rootParam.Descriptor.RegisterSpace = 0;                     // デフォルト値
+		rootParam.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;   //全てのシェーダから見える
 
 
 		// 頂点レイアウトの設定
@@ -383,6 +389,10 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
 		// ルートシグネチャの設定
 		D3D12_ROOT_SIGNATURE_DESC rootSignatureDesc{};
 		rootSignatureDesc.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
+		rootSignatureDesc.pParameters = &rootParam; //ルートパラメータの先頭アドレス
+		rootSignatureDesc.NumParameters = 1;        //ルートパラメータ数
+
+
 		// ルートシグネチャのシリアライズ
 		ID3DBlob* rootSigBlob = nullptr;
 		result = D3D12SerializeRootSignature(&rootSignatureDesc, D3D_ROOT_SIGNATURE_VERSION_1_0,
@@ -398,11 +408,38 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
 		ID3D12PipelineState* pipelineState = nullptr;
 		result = device->CreateGraphicsPipelineState(&pipelineDesc, IID_PPV_ARGS(&pipelineState));
 		assert(SUCCEEDED(result));
-
-
-
-
-
+		// 定数バッファ用データ構造体（マテリアル）
+		struct ConstBufferDataMaterial {
+			XMFLOAT4 color; // 色 (RGBA)
+		};
+		// ヒープ設定
+		D3D12_HEAP_PROPERTIES cbHeapProp{};
+		cbHeapProp.Type = D3D12_HEAP_TYPE_UPLOAD;                   // GPUへの転送用
+		// リソース設定
+		D3D12_RESOURCE_DESC cbResourceDesc{};
+		cbResourceDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+		cbResourceDesc.Width = (sizeof(ConstBufferDataMaterial) + 0xff) & ~0xff;   // 256バイトアラインメント
+		cbResourceDesc.Height = 1;
+		cbResourceDesc.DepthOrArraySize = 1;
+		cbResourceDesc.MipLevels = 1;
+		cbResourceDesc.SampleDesc.Count = 1;
+		cbResourceDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+		ID3D12Resource* constBuffMaterial = nullptr;
+		// 定数バッファの生成
+		result = device->CreateCommittedResource(
+			&cbHeapProp, // ヒープ設定
+			D3D12_HEAP_FLAG_NONE,
+			&cbResourceDesc, // リソース設定
+			D3D12_RESOURCE_STATE_GENERIC_READ,
+			nullptr,
+			IID_PPV_ARGS(&constBuffMaterial));
+		assert(SUCCEEDED(result));
+		// 定数バッファのマッピング
+		ConstBufferDataMaterial* constMapMaterial = nullptr;
+		result = constBuffMaterial->Map(0, nullptr, (void**)&constMapMaterial); // マッピング
+		assert(SUCCEEDED(result));
+		// 値を書き込むと自動的に転送される
+		constMapMaterial->color = XMFLOAT4(1, 0, 0, 0.5f);              // RGBAで半透明の赤
 
 
 
@@ -463,7 +500,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
 	{
 		commandList->ClearRenderTargetView(rtvHandle, clearColor3, 0, nullptr);
 	}
-// 4.描画コマンドここから
+//////////////////////////////////////////////////////////////////////////////////////// 4.描画コマンドここから//////////////////////////////////////////////////////////////////////////////////////
 	// ビューポート設定コマンド
 	D3D12_VIEWPORT viewport{};
 	viewport.Width = window_width;//横幅
@@ -489,9 +526,12 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
 	commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST); // 三角形リスト
 	// 頂点バッファビューの設定コマンド
 	commandList->IASetVertexBuffers(0, 1, &vbView);
+	// 定数バッファビュー(CBV)の設定コマンド
+	commandList->SetGraphicsRootConstantBufferView(0, constBuffMaterial->GetGPUVirtualAddress());
+
 	// 描画コマンド
 	commandList->DrawInstanced(_countof(vertices), 1, 0, 0); // 全ての頂点を使って描画
-// 4.描画コマンドここまで
+//////////////////////////////////////////////////////////////////////////////////////// 4.描画コマンドここまで//////////////////////////////////////////////////////////////////////////////////////
 
 	// 5.リソースバリアを戻す
 	barrierDesc.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET; // 描画状態から
