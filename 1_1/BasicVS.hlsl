@@ -8,8 +8,8 @@ VSOutput main(float4 pos : POSITION, float2 uv : TEXCOORD)
     return output;
 }
 
-float4 main(float4 pos : POSITION) : SV_POSITION
-{
-	return pos;
-}
+//float4 main(float4 pos : POSITION) : SV_POSITION
+//{
+//	return pos;
+//}
 
