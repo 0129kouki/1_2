@@ -62,6 +62,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	w.lpszClassName = L"DirectXGame"; // ウィンドウクラス名
 	w.hInstance = GetModuleHandle(nullptr); // ウィンドウハンドル
 	w.hCursor = LoadCursor(NULL, IDC_ARROW); // カーソル指定
+	
 	// ウィンドウクラスをOSに登録する
 	RegisterClassEx(&w);
 	// ウィンドウサイズ{ X座標 Y座標 横幅 縦幅 }
@@ -745,12 +746,9 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	matView = XMMatrixLookAtLH(XMLoadFloat3(&eye), XMLoadFloat3(&target), XMLoadFloat3(&up));
 	//射影変換行列
 	XMMATRIX matProjection = XMMatrixPerspectiveFovLH(XMConvertToRadians(45.0f),(float)window_width / window_height,0.1f,1000.0f);
-	
-	//定数バッファ
-	//constMapTransform->mat = matProjection;
-	constMapTransform->mat = matView * matProjection;
-	constMapMaterial->color = XMFLOAT4(1, 1, 1, 1);              // RGBAで半透明の赤
 
+	constMapMaterial->color = XMFLOAT4(1, 1, 1, 1);              // RGBAで半透明の赤
+	
 
 
 	// デスクリプタレンジの設定
@@ -836,10 +834,14 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	ID3D12PipelineState* pipelineState = nullptr;
 	result = device->CreateGraphicsPipelineState(&pipelineDesc, IID_PPV_ARGS(&pipelineState));
 	assert(SUCCEEDED(result));
-
-
-
 	float angle = 0.0f; //カメラの回転角
+	//スケーリング倍率
+	XMFLOAT3 scale = { 1.0f,1.0f,1.0f };
+	//回転角
+	XMFLOAT3 rotation = { 0.0f,0.0f,0.0f };
+	//座標
+	XMFLOAT3 position = { 0.0f,0.0f,0.0f };
+
 
 	// **********************************************
 	// ゲームループ
@@ -898,10 +900,51 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 		matView = XMMatrixLookAtLH(XMLoadFloat3(&eye), XMLoadFloat3(&target), XMLoadFloat3(&up));
 	}
 	constMapTransform->mat = matView *matProjection;
-
+	//いずれかのキーを押していたら
+	if (key[DIK_UP] || key[DIK_DOWN] || key[DIK_RIGHT] || key[DIK_LEFT]) {
+		//座標を移動する処理
+		if (key[DIK_UP])
+		{
+			position.z += 1.0f;
+		}
+		else if (key[DIK_DOWN])
+		{
+			position.z -= 1.0f;
+		}
+		if (key[DIK_RIGHT])
+		{
+			position.x += 1.0f;
+		}
+		if (key[DIK_LEFT])
+		{
+			position.x -= 1.0f;
+		}
+	}
+	
 		// *****************************************************
 		// DirectX毎フレーム処理 ここから
-
+	//ワールド変換行列
+	XMMATRIX matWorld;
+	matWorld = constMapTransform->mat;
+	//スケーリング行列
+	XMMATRIX matScale;
+	matScale = XMMatrixScaling(scale.x, scale.y, scale.z);
+	
+	 XMMATRIX matRot;//回転行列
+	 matRot = XMMatrixIdentity();
+	 matRot *= XMMatrixRotationZ(XMConvertToRadians(rotation.z)); //Z軸まわりに45度回転
+	 matRot *= XMMatrixRotationX(XMConvertToRadians(rotation.x)); //X軸まわりに45度回転
+	 matRot *= XMMatrixRotationY(XMConvertToRadians(rotation.y)); //Y軸まわりに45度回転
+	
+	 XMMATRIX matTrans;//平行移動行列
+	 matTrans = XMMatrixTranslation(position.x,position.y,position.z);//(-50,0,0)平行移動
+	 matWorld = XMMatrixIdentity();//変形をリセット
+	matWorld *= matScale;//ワールド行列にスケーリングを反映
+	matWorld *= matRot;//ワールド行列に回転を反映
+	matWorld *= matTrans;//ワールド行列に平行移動を反映
+	//定数バッファ
+	//constMapTransform->mat = matProjection;
+	constMapTransform->mat = matWorld * matView * matProjection;
 		// バックバッファの番号を取得（2つなので0番か1番）
 		UINT bbIndex = swapChain->GetCurrentBackBufferIndex();
 
