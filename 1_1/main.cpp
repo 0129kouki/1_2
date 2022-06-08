@@ -36,7 +36,7 @@ LRESULT WindowProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
 	// 標準のメッセージ処理を行う
 	return DefWindowProc(hwnd, msg, wparam, lparam);
 }
-
+	
 // Windowsアプリでのエントリーポイント(main関数)
 int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 
@@ -267,15 +267,23 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	//	{{100.0f, 100.0f, 0.0f}, {1.0f, 1.0f}}, // 右下
 	//	{{100.0f,   0.0f, 0.0f}, {1.0f, 0.0f}}, // 右上
 	//};	
+	//// 頂点データ
+	//Vertex vertices[] = {
+	//	// x      y     z       u     v
+	//	{{-50.0f, -50.0f, 50.0f}, {0.0f, 1.0f}}, // 左下
+	//	{{-50.0f,  50.0f, 50.0f}, {0.0f, 0.0f}}, // 左上
+	//	{{ 50.0f, -50.0f, 50.0f}, {1.0f, 1.0f}}, // 右下
+	//	{{ 50.0f,  50.0f, 50.0f}, {1.0f, 0.0f}}, // 右上
+	//};
+	
 	// 頂点データ
 	Vertex vertices[] = {
 		// x      y     z       u     v
-		{{-50.0f, -50.0f, 50.0f}, {0.0f, 1.0f}}, // 左下
-		{{-50.0f,  50.0f, 50.0f}, {0.0f, 0.0f}}, // 左上
-		{{ 50.0f, -50.0f, 50.0f}, {1.0f, 1.0f}}, // 右下
-		{{ 50.0f,  50.0f, 50.0f}, {1.0f, 0.0f}}, // 右上
+		{{-50.0f, -50.0f, 0.0f}, {0.0f, 1.0f}}, // 左下
+		{{-50.0f,  50.0f, 0.0f}, {0.0f, 0.0f}}, // 左上
+		{{ 50.0f, -50.0f, 0.0f}, {1.0f, 1.0f}}, // 右下
+		{{ 50.0f,  50.0f, 0.0f}, {1.0f, 0.0f}}, // 右上
 	};
-
 	// 頂点データ全体のサイズ = 頂点データ一つ分のサイズ * 頂点データの要素数
 	UINT sizeVB = static_cast<UINT>(sizeof(vertices[0]) * _countof(vertices));
 
@@ -474,7 +482,6 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	//	sizeof(XMFLOAT4) * textureWidth, // 1ラインサイズ
 	//	sizeof(XMFLOAT4) * imageDataCount // 全サイズ
 	//);
-
 	//// 元データ解放
 	//delete[] imageData;
 
@@ -662,6 +669,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	ConstBufferDataTransform* constMapTransform = nullptr;
 	ID3D12Resource* constBuffTransform = nullptr;
 	//ConstBufferDataTransform* constMapTransform = nullptr;
+
 	// ヒープ設定
 	D3D12_HEAP_PROPERTIES cbHeapProp{};
 	cbHeapProp.Type = D3D12_HEAP_TYPE_UPLOAD;                   // GPUへの転送用
@@ -728,12 +736,22 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	//constMapTransform->mat = XMMatrixOrthographicOffCenterLH(2.0f/1280,-2.0f/720,-1.0f,1.0f,0.0f, 1.0f);
 	//constMapTransform->mat = XMMatrixPerspectiveFovLH(XMConvertToRadians(45.0f),(float)1280/720,0.1f,1000.0f);
 	// 値を書き込むと自動的に転送される
-
+	
+	//ビュー変換行列
+	XMMATRIX matView;
+	XMFLOAT3 eye(0, 0, -100);   //視点座標
+	XMFLOAT3 target(0, 0, 0);   //注視点座標
+	XMFLOAT3 up(0, 1, 0);       //上方向ベクトル
+	matView = XMMatrixLookAtLH(XMLoadFloat3(&eye), XMLoadFloat3(&target), XMLoadFloat3(&up));
 	//射影変換行列
 	XMMATRIX matProjection = XMMatrixPerspectiveFovLH(XMConvertToRadians(45.0f),(float)window_width / window_height,0.1f,1000.0f);
+	
 	//定数バッファ
-	constMapTransform->mat = matProjection;
+	//constMapTransform->mat = matProjection;
+	constMapTransform->mat = matView * matProjection;
 	constMapMaterial->color = XMFLOAT4(1, 1, 1, 1);              // RGBAで半透明の赤
+
+
 
 	// デスクリプタレンジの設定
 	D3D12_DESCRIPTOR_RANGE descriptorRange{};
@@ -821,6 +839,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 
 
 
+	float angle = 0.0f; //カメラの回転角
 
 	// **********************************************
 	// ゲームループ
@@ -862,7 +881,23 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 		{
 			constMapMaterial->color.x -= 0.1f;
 		}
-
+	if (key[DIK_D] || key[DIK_A])
+	{
+		if (key[DIK_D]) 
+		{
+			angle += XMConvertToRadians(1.0f);
+		}
+		else if (key[DIK_A])
+		{
+			angle -= XMConvertToRadians(1.0f);
+		}
+		//angleラジアンだけY軸周りに回転。半径は‐100
+		eye.x = -100 * sinf(angle);
+		eye.z = -100 * cosf(angle); 
+		
+		matView = XMMatrixLookAtLH(XMLoadFloat3(&eye), XMLoadFloat3(&target), XMLoadFloat3(&up));
+	}
+	constMapTransform->mat = matView *matProjection;
 
 		// *****************************************************
 		// DirectX毎フレーム処理 ここから
